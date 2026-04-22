@@ -4,3 +4,6 @@ finbert-difficulty-model
 tmp
 dataset.csv
 universal_cefr.csv
+venv
+reformed_dataset.csv
+original_dataset.csv
