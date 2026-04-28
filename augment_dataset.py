@@ -7,7 +7,7 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-datasets = ["UniversalCEFR/cefr_asag_en", "UniversalCEFR/elg_cefr_en", "UniversalCEFR/readme_en"]
+datasets = ["UniversalCEFR/cefr_asag_en", "UniversalCEFR/elg_cefr_en", "UniversalCEFR/readme_en", "UniversalCEFR/cambridge_exams_en", "UniversalCEFR/icle500_en"]
 model_name = "Helsinki-NLP/opus-mt-en-fi"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
@@ -31,7 +31,7 @@ CEFR_TO_SCORE = {
 
 def translate_data():
     data = [{"label": CEFR_TO_SCORE[sample["cefr_level"].strip().upper()], "source_text": sample["text"].strip()}
-            for dataset in datasets for sample in load_dataset(dataset, split="train")]
+            for dataset in datasets for sample in load_dataset(dataset, split="train") if sample["cefr_level"].strip().upper() in CEFR_TO_SCORE]
 
     batch_size = 8
     max_length = 512
