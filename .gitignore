@@ -9,3 +9,6 @@ reformed_dataset.csv
 original_dataset.csv
 train.csv
 test.csv
+*.csv
+*.db
+best_model

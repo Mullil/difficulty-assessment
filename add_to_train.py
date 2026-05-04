@@ -1,6 +1,6 @@
 import pandas as pd
 
-SOURCE = "universal_cefr.csv"
+SOURCE = "original_dataset.csv"
 OUTPUT = "train.csv"
 
 # Set the number of instances to add per label.
@@ -13,7 +13,9 @@ LABEL_COUNTS = {
     3.0: 200,
     3.5: None,
     4.0: 500,
+    4.5: None,
     5.0: None,
+    5.5: None,
     6.0: None,
 }
 
