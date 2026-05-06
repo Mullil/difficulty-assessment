@@ -6,7 +6,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer, Data
 
 MODEL_DIR = "./best_model"
 
-valid_df = pd.read_csv("valid.csv", usecols=["text"], dtype={"text": "string"})
+valid_df = pd.read_csv("testset_text_only.csv", usecols=["text"], dtype={"text": "string"})
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
 model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
@@ -28,6 +28,7 @@ args = TrainingArguments(
 trainer = Trainer(model=model, args=args, data_collator=DataCollatorWithPadding(tokenizer))
 output = trainer.predict(dataset)
 predictions = np.squeeze(output.predictions)
+predictions = np.round(predictions * 2) / 2
 
 pd.DataFrame({"prediction": predictions}).to_csv("predictions.csv", index=False)
 print("Saved predictions.csv")
