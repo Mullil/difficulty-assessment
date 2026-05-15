@@ -1,3 +1,11 @@
+"""Fine-tune a FinBERT as a CEFR regressor.
+
+Uses Optuna to search over training dataset choice, learning rate, epochs,
+weight decay and dropout values. Optimises validation RMSE on ``valid.csv``,
+then retrains a final model with the best hyperparameters and saves it to
+``best_model/`` along with its metrics.
+"""
+
 import json
 import os
 
@@ -21,7 +29,9 @@ N_TRIALS = 20
 valid_df = pd.read_csv("valid.csv", usecols=["text", "label"], dtype={"text": "string", "label": "float32"})
 
 
-def make_model(hidden_dropout: float, attention_dropout: float):
+def make_model(hidden_dropout: float, attention_dropout: float) -> AutoModelForSequenceClassification:
+    """Build a single-output regression head on top of the Finnish BERT base
+    model with configurable dropout values."""
     return AutoModelForSequenceClassification.from_pretrained(
         MODEL_NAME,
         num_labels=1,
@@ -41,7 +51,8 @@ def tokenize_split(dataframe, tokenizer):
     return dataset.remove_columns(["text"])
 
 
-def compute_metrics(eval_pred):
+def compute_metrics(eval_pred) -> dict[str, float]:
+    """Return RMSE and MAE for the regression model's predictions."""
     predictions, labels = eval_pred
     predictions = np.squeeze(predictions)
     labels = np.squeeze(labels)
@@ -54,7 +65,11 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     eval_ds = tokenize_split(valid_df, tokenizer)
 
-    def objective(trial):
+    def objective(trial: optuna.trial.Trial) -> float:
+        """Single Optuna trial: train one model with sampled hyperparameters
+        and return its validation RMSE for the optimiser to minimise."""
+        # The training-set choice itself is treated as a hyperparameter so
+        # Optuna can pick the most useful augmentation strategy.
         dataset = trial.suggest_categorical("dataset", ["original_train.csv", "LLM_augmented.csv", "MT_augmented.csv", "train_all_combined.csv"])
         train_df = pd.read_csv(dataset, usecols=["text", "label"], dtype={"text": "string", "label": "float32"})
         train_ds = tokenize_split(train_df, tokenizer)
@@ -91,6 +106,7 @@ if __name__ == "__main__":
         metrics = trainer.evaluate()
         return metrics["eval_rmse"]
 
+    # Persisting to SQLite lets us resume the search across separate runs.
     study = optuna.create_study(direction="minimize", storage="sqlite:///optuna_study.db", load_if_exists=True)
     study.optimize(objective, n_trials=N_TRIALS)
 
@@ -127,6 +143,7 @@ if __name__ == "__main__":
     final_trainer.train()
     metrics = final_trainer.evaluate()
 
+    # Save the final model + tokenizer so predict.py can load them later.
     os.makedirs("best_model", exist_ok=True)
     final_trainer.save_model("best_model")
     tokenizer.save_pretrained("best_model")

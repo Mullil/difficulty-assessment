@@ -1,5 +1,9 @@
+"""Print the label distribution (count and percentage) of the final combined
+training for sanity-checking."""
+
 import pandas as pd
 
+# Final training set = original + MT-augmented + LLM-augmented rows.
 df = pd.read_csv("train_all_combined.csv")
 counts = df["label"].value_counts().sort_index()
 total = len(df)

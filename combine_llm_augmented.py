@@ -28,24 +28,27 @@ SEED = 42
 
 
 def combine(source_path: str, target_path: str, output_path: str, seed: int) -> None:
+    """Merge the LLM-augmented source CSV into the target training CSV.
+    """
     src = pd.read_csv(source_path)
     tgt = pd.read_csv(target_path)
 
+    # Both CSVs must share the same schema before we concatenate them.
     expected_cols = ["#", "text", "label"]
     for df, name in [(src, "source"), (tgt, "target")]:
         missing = [c for c in expected_cols if c not in df.columns]
         if missing:
             sys.exit(f"Error: {name} CSV is missing columns: {missing}")
 
-    # Coerce labels to numeric so 3 and 3.0 compare equally
+    # Coerce labels so that e.g. 3 and 3.0 compare equally.
     src["label"] = pd.to_numeric(src["label"], errors="raise")
 
-    # Drop label == DROP_LABEL
+    # Skip the dominant label entirely.
     drop_mask = src["label"] == DROP_LABEL
     dropped = int(drop_mask.sum())
     src = src[~drop_mask]
 
-    # Sample label == SAMPLE_LABEL
+    # Cap the next most common label to avoid skewing the distribution further.
     is_sample = src["label"] == SAMPLE_LABEL
     pool = src[is_sample]
     rest = src[~is_sample]
@@ -55,10 +58,9 @@ def combine(source_path: str, target_path: str, output_path: str, seed: int) -> 
 
     kept = pd.concat([rest, sampled], ignore_index=True)
 
-    # Offset the # column
+    # Shift IDs so source and target rows never collide in the combined file.
     kept["#"] = kept["#"].astype(int) + ID_OFFSET
 
-    # Append to target and save
     combined = pd.concat([tgt, kept], ignore_index=True)
     combined.to_csv(output_path, index=False)
 

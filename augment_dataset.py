@@ -1,3 +1,10 @@
+"""Machine-translation based data augmentation.
+
+Loads English CEFR-labelled corpora from HuggingFace and translates each text into
+Finnish using an Opus-MT model. Stores the translations together with their
+numeric CEFR score in a CSV that matches the format of the main training set.
+"""
+
 from pathlib import Path
 import pandas as pd
 import torch
@@ -7,6 +14,7 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Source corpora to augment from and the EN->FI translation model.
 datasets = ["UniversalCEFR/cefr_asag_en", "UniversalCEFR/elg_cefr_en", "UniversalCEFR/readme_en", "UniversalCEFR/cambridge_exams_en", "UniversalCEFR/icle500_en"]
 model_name = "Helsinki-NLP/opus-mt-en-fi"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -14,6 +22,7 @@ model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 model.to(device)
 model.eval()
 
+# Map textual CEFR levels to the numeric scale used in the training set.
 CEFR_TO_SCORE = {
     "A1": 1.0,
     "A1+": 1.5,
@@ -29,7 +38,10 @@ CEFR_TO_SCORE = {
 }
 
 
-def translate_data():
+def translate_data() -> list[dict]:
+    """Load the configured English CEFR corpora, translate each text into Finnish
+    in batches and return a list of {"text", "label"} dictionaries."""
+    # Flatten all source datasets and keep only rows with a known CEFR level.
     data = [{"label": CEFR_TO_SCORE[sample["cefr_level"].strip().upper()], "source_text": sample["text"].strip()}
             for dataset in datasets for sample in load_dataset(dataset, split="train") if sample["cefr_level"].strip().upper() in CEFR_TO_SCORE]
 
@@ -37,6 +49,7 @@ def translate_data():
     max_length = 512
     translated_rows = []
 
+    # Translate in mini-batches to fit GPU memory.
     for batch_start in range(0, len(data), batch_size):
         batch_rows = data[batch_start: batch_start + batch_size]
         source_texts = [row["source_text"] for row in batch_rows]

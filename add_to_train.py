@@ -1,3 +1,6 @@
+"""Append a subset of rows from a source CSV into the existing training CSV,
+allowing per-label control over how many rows to include."""
+
 import pandas as pd
 
 SOURCE = "original_dataset.csv"
@@ -21,6 +24,7 @@ LABEL_COUNTS = {
 
 df = pd.read_csv(SOURCE)
 
+# Collect the chosen subset for each label.
 frames = []
 for label, count in LABEL_COUNTS.items():
     subset = df[df["label"] == label]
@@ -30,13 +34,14 @@ for label, count in LABEL_COUNTS.items():
     if count is None or count >= len(subset):
         sampled = subset
     else:
+        # Fixed seed for reproducible sampling across runs.
         sampled = subset.sample(n=count, random_state=42)
     frames.append(sampled)
     print(f"Label {label}: adding {len(sampled)} instances")
 
 new_rows = pd.concat(frames).reset_index(drop=True)
 
-
+# Append to the existing training CSV in place.
 existing = pd.read_csv(OUTPUT)
 combined = pd.concat([existing, new_rows], ignore_index=True)
 print(f"\nAppended to existing {OUTPUT} ({len(existing)} -> {len(combined)} rows)")

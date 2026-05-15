@@ -1,9 +1,13 @@
+"""Stratified train/test split of the preprocessed dataset.
+"""
+
 import csv
 import random
 from collections import defaultdict
 from pathlib import Path
 
-
+# Split dataset into train and test set with 80/20 distribution. 
+# Use stratified split to preserve the same label distribution in both. 
 def stratified_split(input_path: str, train_path: str, test_path: str,
                      test_size: float = 0.2, seed: int = 42) -> None:
     random.seed(seed)
@@ -34,7 +38,7 @@ def stratified_split(input_path: str, train_path: str, test_path: str,
         train_rows.extend(rows[n_test:])
         print(f"{label:>8}  {len(rows):>6}  {n_train:>6}  {n_test:>6}")
 
-    # Shuffle final sets so labels aren't grouped
+    # Shuffle so consecutive rows in the output aren't from the same label.
     random.shuffle(train_rows)
     random.shuffle(test_rows)
 
@@ -67,7 +71,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--test", default=None,
-        help="Output path for test CSV (default: test.csv)"
+        help="Output path for test CSV (default: valid.csv)"
     )
     parser.add_argument(
         "--test-size", type=float, default=0.2,
@@ -81,7 +85,7 @@ if __name__ == "__main__":
 
     input_path = Path(args.input)
     train_path = args.train or str(input_path.with_name("train.csv"))
-    test_path  = args.test  or str(input_path.with_name("test.csv"))
+    test_path  = args.test  or str(input_path.with_name("valid.csv"))
 
     stratified_split(
         input_path=str(input_path),

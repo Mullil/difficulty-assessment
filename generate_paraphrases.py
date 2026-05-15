@@ -6,7 +6,7 @@ from vllm import LLM, SamplingParams
 from tqdm import tqdm
 
 
-# CEFR mapping: floats to CEFR strings. (intermediates towards the polar edges)
+# Numeric label -> CEFR string used in the LLM prompt.
 FLOAT_TO_CEFR = {
     1.0: "A1",
     1.5: "A1+",
@@ -21,7 +21,7 @@ FLOAT_TO_CEFR = {
     6.0: "C2",
 }
 
-# Output label per CEFR string. Floats so half-steps are preserved.
+# Reverse mapping for writing the numeric label back to the output CSV.
 CEFR_TO_LABEL = {
     "A1": 1.0, "A1+": 1.5,
     "A2": 2.0, "A2+": 2.5,
@@ -31,6 +31,7 @@ CEFR_TO_LABEL = {
     "C2": 6.0,
 }
 
+# CEFR despcriptions for the LLM.
 CEFR_DESCRIPTIONS_FI = {
     "A1":  "alkeistaso – hyvin yksinkertainen sanasto, lyhyet lauseet, perusaikamuodot, vain konkreettiset aiheet",
     "A1+": "alkeistason ja perustason väliltä – pääosin hyvin yksinkertaista sanastoa ja lyhyitä lauseita kuten A1:llä, mutta mukana on jo joitakin sidesanoja (ja, mutta, koska) ja hieman pidempiä lauseita",
@@ -46,7 +47,8 @@ CEFR_DESCRIPTIONS_FI = {
 }
 
 
-def map_label_to_cefr(label_value) -> str:
+def map_label_to_cefr(label_value: float | str) -> str:
+    """Convert a numeric CEFR label (e.g. 3.5) to its string form (e.g. "B1+")."""
     label = round(float(label_value), 1)
     if label in FLOAT_TO_CEFR:
         return FLOAT_TO_CEFR[label]
@@ -94,7 +96,7 @@ def load_existing_ids(output_path: str) -> set[str]:
     return done
 
 
-# Patterns the model commonly adds; we strip them post-hoc.
+# Boilerplate prefixes the model frequently emits; stripped from outputs.
 _PREAMBLE_PATTERNS = [
     re.compile(
         r"^\s*(uudelleen\s+muotoiltu\s+teksti|tässä\s+on\s+uudelleen\s+muotoiltu\s+teksti)[:\-–—]?\s*",
@@ -161,7 +163,7 @@ def clean_output(text: str) -> str:
 
     return cleaned
 
-
+# Generate synthetic text passages preserving the corresponding CEFR ratings.
 def augment_csv(
     input_path: str = "train.csv",
     output_path: str = "train_llm_augmented.csv",
@@ -177,10 +179,10 @@ def augment_csv(
     seed: int = 42,
 ) -> None:
     """Paraphrase every row in `input_path` with vLLM, writing chunked output."""
-    # Read input
     with open(input_path, "r", encoding="utf-8", newline="") as f_in:
         rows = list(csv.DictReader(f_in))
 
+    # Checkpoint
     already_done = load_existing_ids(output_path)
     if already_done:
         print(f"Resuming: {len(already_done)} rows already written, skipping them.")
@@ -190,6 +192,7 @@ def augment_csv(
         print("Nothing to do — all rows already paraphrased.")
         return
 
+    # Load model via vllm
     print(f"Loading {model_name}...")
     llm = LLM(
         model=model_name,
@@ -305,6 +308,8 @@ def augment_csv(
             writer.writerow(["#", "text", "label"])
             f_out.flush()
 
+        # Process in chunks so partial progress is flushed to disk and the
+        # run can be resumed if it dies mid-way through.
         for start in tqdm(range(0, len(prepared), chunk_size), desc="Chunks"):
             chunk = prepared[start : start + chunk_size]
             prompts = [item["prompt"] for item in chunk]
@@ -312,6 +317,7 @@ def augment_csv(
             try:
                 outputs = llm.generate(prompts, sampling, use_tqdm=False)
             except ValueError as e:
+                # Fall back to one-by-one so a single bad prompt doesn't kill the chunk.
                 print(f"Chunk failed ({e}); retrying one prompt at a time.")
                 outputs = []
                 kept_chunk = []

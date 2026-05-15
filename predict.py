@@ -1,3 +1,6 @@
+"""Run the trained CEFR regression model on a text-only test CSV and write the
+predictions (rounded to the nearest 0.5) to predictions.csv."""
+
 import numpy as np
 import pandas as pd
 import torch
